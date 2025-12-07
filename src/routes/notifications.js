@@ -1,7 +1,7 @@
 import express from 'express'
 import db from '../db.js'
 import { requireAuth } from '../middleware/auth.js'
-import { createAISuggestionNotification, generateNotificationsFromReminders } from '../utils/notificationHelper.js'
+import { createAISuggestionNotification, createWeatherConditionNotification, generateNotificationsFromReminders } from '../utils/notificationHelper.js'
 
 const router = express.Router()
 
@@ -41,6 +41,25 @@ router.get('/', requireAuth, async (req, res) => {
     }))
     res.json(notifications)
   } catch (e) {
+    res.status(500).json({ message: e.message })
+  }
+})
+
+// Create weather-based AI suggestion notification
+router.post('/weather-suggestion', requireAuth, async (req, res) => {
+  try {
+    const { main, description, temp } = req.body || {}
+
+    if (!main && !description) {
+      return res.status(400).json({ message: 'Weather main or description is required' })
+    }
+
+    const weather = { main, description, temp }
+    const created = await createWeatherConditionNotification(db, req.user.id, weather)
+
+    res.json({ success: true, created })
+  } catch (e) {
+    console.error('Error creating weather suggestion notification:', e)
     res.status(500).json({ message: e.message })
   }
 })

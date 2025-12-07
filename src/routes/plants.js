@@ -328,6 +328,18 @@ router.put('/:id', requireAuth, validatePlant, async (req, res) => {
     // Update productivity metric if status changed
     if (status && status !== current.status) {
       await createProductivityMetric(db, req.user.id, id, status)
+
+      // Deactivate pending/due reminders when plant is no longer active
+      if (status !== 'active') {
+        await db.query(
+          `UPDATE reminders
+           SET active = false
+           WHERE plant_id = $1
+             AND COALESCE(active, true) = true
+             AND COALESCE(status, 'pending') IN ('pending', 'due')`,
+          [id]
+        )
+      }
     }
     
     // Get updated plant data with estimated_harvest_date

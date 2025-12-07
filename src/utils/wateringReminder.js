@@ -120,7 +120,7 @@ export async function generateNotificationsFromDueReminders() {
     
     const today = new Date().toISOString().split('T')[0]
     
-    // Get all due reminders
+    // Get all due reminders for active plants (or global reminders without plant)
     const { rows: reminders } = await db.query(`
       SELECT r.*, u.email, p.name as plant_name, l.name as land_name
       FROM reminders r
@@ -129,6 +129,7 @@ export async function generateNotificationsFromDueReminders() {
       LEFT JOIN lands l ON p.land_id = l.id
       WHERE r.due_date <= $1
       AND r.status = 'pending'
+      AND (p.id IS NULL OR COALESCE(p.status, 'active') = 'active')
     `, [today])
 
     console.log(`Found ${reminders.length} due reminders`)

@@ -206,6 +206,61 @@ export async function createAISuggestionNotification(db, userId, plantData = nul
 }
 
 /**
+ * Create weather-based suggestion notification from current weather condition
+ * @param {Object} db - Database query function
+ * @param {number} userId - User ID
+ * @param {Object} weather - Weather info { main, description, temp }
+ */
+export async function createWeatherConditionNotification(db, userId, weather) {
+  try {
+    if (!weather || !weather.main) return 0
+
+    const main = (weather.main || '').toLowerCase()
+    const description = weather.description || ''
+    const temp = weather.temp
+
+    let title = 'Info Cuaca'
+    let message = 'Periksa kondisi cuaca sebelum melakukan aktivitas di lahan.'
+
+    if (main.includes('rain') || description.toLowerCase().includes('hujan')) {
+      title = 'Cuaca Hujan - Atur Penyiraman'
+      message = 'Saat ini cuaca hujan. Kurangi frekuensi penyiraman dan perhatikan potensi genangan air di lahan.'
+    } else if (main.includes('clear') || description.toLowerCase().includes('cerah') || description.toLowerCase().includes('panas')) {
+      title = 'Cuaca Panas / Cerah Terik'
+      message = 'Cuaca sedang panas/cerah. Pastikan tanaman cukup air dan periksa gejala layu atau kekeringan.'
+    } else if (main.includes('cloud') || description.toLowerCase().includes('berawan')) {
+      title = 'Cuaca Berawan'
+      message = 'Cuaca berawan. Ini waktu yang baik untuk melakukan aktivitas perawatan di lapangan karena tidak terlalu terik.'
+    }
+
+    const today = new Date().toISOString().split('T')[0]
+
+    // Hindari notif ganda dengan judul yang sama di hari yang sama
+    const { rows: existing } = await db.query(
+      `SELECT id FROM notifications
+       WHERE user_id = $1
+         AND title = $2
+         AND DATE(created_at) = $3
+         AND related_entity_type = 'ai_suggestion'`,
+      [userId, title, today]
+    )
+
+    if (existing.length > 0) return 0
+
+    await db.query(
+      `INSERT INTO notifications (user_id, title, message, type, related_entity_type, is_read)
+       VALUES ($1, $2, $3, $4, 'ai_suggestion', false)`,
+      [userId, title, message, 'info']
+    )
+
+    return 1
+  } catch (error) {
+    console.error('Error creating weather condition notification:', error)
+    return 0
+  }
+}
+
+/**
  * Generate maintenance reminder notifications from templates
  * @param {Object} db - Database query function
  * @param {number} userId - User ID
@@ -257,7 +312,8 @@ export async function generateNotificationsFromReminders(db, userId) {
        WHERE r.user_id = $1
          AND COALESCE(r.active, true) = true
          AND COALESCE(r.status, 'pending') IN ('pending','due')
-         AND DATE(r.due_date) <= $2`,
+         AND DATE(r.due_date) <= $2
+         AND (p.id IS NULL OR COALESCE(p.status, 'active') = 'active')`,
       [userId, today]
     )
 

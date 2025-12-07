@@ -19,6 +19,7 @@ router.get('/', requireAuth, async (req, res) => {
        AND r.status = 'pending'
        AND r.due_date >= NOW()
        AND r.due_date <= NOW() + INTERVAL '7 days'
+       AND (p.id IS NULL OR COALESCE(p.status, 'active') = 'active')
        ORDER BY r.due_date ASC`,
       [req.user.id]
     )
