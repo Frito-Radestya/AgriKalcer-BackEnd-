@@ -27,12 +27,7 @@ const app = express();
 
 // Middleware
 app.use(helmet());
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://lumbungtaniapp.vercel.app', 'https://agrikalcer-backend-production.up.railway.app']
-    : ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'],
-  credentials: true
-}));
+app.use(cors());
 app.use(express.json());
 app.use(morgan('dev'));
 
