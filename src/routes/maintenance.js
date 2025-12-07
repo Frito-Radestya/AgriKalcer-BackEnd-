@@ -3,6 +3,7 @@ import db from '../db.js'
 import { requireAuth } from '../middleware/auth.js'
 import { validateMaintenance } from '../middleware/validation.js'
 import { createMaintenanceReminderNotification } from '../utils/notificationHelper.js'
+import { createWateringReminder } from '../utils/wateringReminder.js'
 
 const router = express.Router()
 
@@ -101,6 +102,20 @@ router.post('/', requireAuth, validateMaintenance, async (req, res) => {
         activityDescription: type,
         day: Math.floor((new Date() - new Date(plantInfo.planting_date || new Date())) / (1000 * 60 * 60 * 24))
       })
+
+      // Create automatic watering reminder for next watering
+      if (mappedType === 'watering' && plantInfo.watering_interval) {
+        await createWateringReminder(
+          req.user.id,
+          plantId,
+          new Date(date),
+          plantInfo.watering_interval,
+          {
+            name: plantInfo.name,
+            landName: plantInfo.land_name
+          }
+        )
+      }
     } catch (notifError) {
       console.error('Error creating maintenance notification:', notifError)
       // Don't fail the request if notification creation fails

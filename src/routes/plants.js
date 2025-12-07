@@ -22,7 +22,7 @@ function presentPlant(row) {
       ? { id: row.land_id, name: row.land_name, area_size: row.land_area_size, location: row.land_location }
       : null,
     plant_type: row.plant_type_id
-      ? { id: row.plant_type_id, name: row.plant_type_name, watering_interval: row.watering_interval }
+      ? { id: row.plant_type_id, name: row.plant_type_name, watering_interval: row.watering_interval, icon: row.icon, harvest_days: row.harvest_days }
       : null,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -36,7 +36,7 @@ router.get('/', requireAuth, async (req, res) => {
     const { rows } = await db.query(
       `SELECT p.*, 
               l.id as land_id, l.name as land_name, l.area_size as land_area_size, l.location as land_location,
-              pt.id as plant_type_id, pt.name as plant_type_name, pt.watering_interval,
+              pt.id as plant_type_id, pt.name as plant_type_name, pt.watering_interval, pt.icon, pt.harvest_days,
               p.estimated_harvest_date
        FROM plants p
        LEFT JOIN lands l ON p.land_id = l.id

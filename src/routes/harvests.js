@@ -3,6 +3,7 @@ import db from '../db.js'
 import { requireAuth } from '../middleware/auth.js'
 import { validateHarvest } from '../middleware/validation.js'
 import { updateProductivityMetricOnHarvest } from '../utils/productivityHelper.js'
+import { createNotificationFromTemplate } from '../utils/notificationHelper.js'
 
 const router = express.Router()
 
@@ -52,9 +53,9 @@ router.post('/', requireAuth, validateHarvest, async (req, res) => {
       return res.status(400).json({ message: 'plantId, date, amount, and pricePerKg are required' })
     }
 
-    // Verify plant belongs to user
+    // Verify plant belongs to user dan ambil nama tanaman untuk notifikasi
     const { rows: plantCheck } = await db.query(
-      'SELECT id FROM plants WHERE id=$1 AND user_id=$2',
+      'SELECT id, name FROM plants WHERE id=$1 AND user_id=$2',
       [plantId, req.user.id]
     )
     if (!plantCheck.length) {
@@ -97,13 +98,39 @@ router.post('/', requireAuth, validateHarvest, async (req, res) => {
       // Don't fail the request if metric update fails
     }
     
+    // Buat notifikasi "selamat panen" berbasis template
+    try {
+      const plantName = plantCheck[0]?.name || 'Tanaman'
+      await createNotificationFromTemplate(
+        db,
+        req.user.id,
+        'harvest_congrats',
+        {
+          plant_name: plantName,
+          harvest_amount: `${amountInKg} kg`,
+          harvest_unit: unit || 'kg',
+          harvest_amount_original: `${amount} ${unit || 'kg'}`,
+          harvest_revenue: revenue.toFixed(0),
+          harvest_date: date,
+        },
+        plantId,
+        'harvest',
+        created.id,
+      )
+    } catch (notifError) {
+      console.error('Error creating harvest congratulations notification:', notifError)
+      // Jangan gagal hanya karena notifikasi error
+    }
+    
     res.status(201).json({
       id: created.id,
       plantId: created.plant_id,
       date: created.date,
       amount: parseFloat(created.amount),
+      unit: created.unit,
       pricePerKg: parseFloat(created.price_per_kg),
       revenue: parseFloat(created.revenue),
+      quality: created.quality,
       notes: created.notes,
       createdAt: created.created_at,
     })
@@ -138,9 +165,9 @@ router.put('/:id', requireAuth, validateHarvest, async (req, res) => {
       }
     }
 
-    // Get current values to calculate revenue correctly
+    // Get current values (including unit) to calculate revenue correctly
     const { rows: currentRows } = await db.query(
-      'SELECT amount, price_per_kg FROM harvests WHERE id=$1 AND user_id=$2',
+      'SELECT amount, price_per_kg, unit FROM harvests WHERE id=$1 AND user_id=$2',
       [id, req.user.id]
     )
     if (!currentRows.length) {
@@ -150,7 +177,20 @@ router.put('/:id', requireAuth, validateHarvest, async (req, res) => {
     const current = currentRows[0]
     const finalAmount = amount ? parseFloat(amount) : parseFloat(current.amount)
     const finalPricePerKg = pricePerKg ? parseFloat(pricePerKg) : parseFloat(current.price_per_kg)
-    const calculatedRevenue = finalAmount * finalPricePerKg
+
+    // Gunakan unit dari request jika ada, jika tidak pakai unit existing, default 'kg'
+    const unitFromRequest = req.body.unit
+    const effectiveUnit = unitFromRequest || current.unit || 'kg'
+
+    // Konversi ke kg dulu baru hitung revenue, sama seperti route POST
+    let amountInKg = finalAmount
+    if (effectiveUnit === 'ton') {
+      amountInKg = amountInKg * 1000
+    } else if (effectiveUnit === 'kuintal') {
+      amountInKg = amountInKg * 100
+    }
+
+    const calculatedRevenue = amountInKg * finalPricePerKg
 
     const { rows } = await db.query(
       `UPDATE harvests SET 
@@ -183,6 +223,7 @@ router.put('/:id', requireAuth, validateHarvest, async (req, res) => {
       plantId: updated.plant_id,
       date: updated.date,
       amount: parseFloat(updated.amount),
+      unit: updated.unit || 'kg',
       pricePerKg: parseFloat(updated.price_per_kg),
       revenue: parseFloat(updated.revenue),
       quality: updated.quality,

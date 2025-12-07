@@ -1,6 +1,7 @@
 import express from 'express'
 import db from '../db.js'
 import { requireAuth } from '../middleware/auth.js'
+import { checkAndCreateAllWateringReminders, generateNotificationsFromDueReminders } from '../utils/wateringReminder.js'
 
 const router = express.Router()
 
@@ -137,6 +138,28 @@ router.delete('/:id', requireAuth, async (req, res) => {
     res.json({ success: true })
   } catch (e) {
     res.status(400).json({ message: e.message })
+  }
+})
+
+// Test endpoint - check and create watering reminders (for development/testing)
+router.post('/check-watering', requireAuth, async (req, res) => {
+  try {
+    await checkAndCreateAllWateringReminders()
+    await generateNotificationsFromDueReminders()
+    res.json({ message: 'Watering reminders checked and notifications generated' })
+  } catch (e) {
+    res.status(500).json({ message: e.message })
+  }
+})
+
+// Test endpoint - run daily notification scheduler (for development/testing)
+router.post('/run-scheduler', requireAuth, async (req, res) => {
+  try {
+    const { runDailyNotificationScheduler } = require('../utils/notificationScheduler.js')
+    await runDailyNotificationScheduler()
+    res.json({ message: 'Daily notification scheduler completed successfully' })
+  } catch (e) {
+    res.status(500).json({ message: e.message })
   }
 })
 

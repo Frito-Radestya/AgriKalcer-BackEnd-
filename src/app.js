@@ -4,7 +4,7 @@ import cors from 'cors'
 import helmet from 'helmet'
 import morgan from 'morgan'
 import authRouter from './routes/auth.js'
-import authForgotRouter from './routes/auth-forgot.js'
+import authForgotRouter from './routes/auth-forgot-simple.js'
 import landsRouter from './routes/lands.js'
 import plantsRouter from './routes/plants.js'
 import plantTypesRouter from './routes/plantTypes.js'
@@ -17,6 +17,8 @@ import maintenanceLogsRouter from './routes/maintenance_logs.js'
 import productivityMetricsRouter from './routes/productivity_metrics.js'
 import messageTemplatesRouter from './routes/message_templates.js'
 import aiRouter from './routes/ai.js'
+import emailSettingsRouter from './routes/emailSettings.js'
+import otpRouter from './routes/otp.js'
 import db from './db.js'
 
 const app = express()
@@ -51,6 +53,8 @@ app.use('/api/maintenance-logs', maintenanceLogsRouter)
 app.use('/api/productivity-metrics', productivityMetricsRouter)
 app.use('/api/message-templates', messageTemplatesRouter)
 app.use('/api/ai', aiRouter)
+app.use('/api/email-settings', emailSettingsRouter)
+app.use('/api/otp', otpRouter)
 
 const PORT = process.env.PORT || 4001
 app.listen(PORT, () => {

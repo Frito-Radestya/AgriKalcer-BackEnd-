@@ -2,14 +2,8 @@ import express from 'express'
 import db from '../db.js'
 import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
-import { sendNewPasswordEmail } from '../utils/emailConfig.js'
 
 const router = express.Router()
-
-// Generate reset token
-function generateResetToken() {
-  return crypto.randomBytes(32).toString('hex')
-}
 
 // Generate random password
 function generateRandomPassword() {
@@ -21,16 +15,26 @@ function generateRandomPassword() {
   return password;
 }
 
-// Request password reset
+// Request password reset - menampilkan password baru langsung
 router.post('/forgot-password', async (req, res) => {
   try {
-    const { email } = req.body
+    const { email, newPassword } = req.body
     
     if (!email) {
       return res.status(400).json({ 
         success: false,
         message: 'Email harus diisi' 
       })
+    }
+
+    // Validasi password custom jika ada
+    if (newPassword) {
+      if (newPassword.length < 6) {
+        return res.status(400).json({
+          success: false,
+          message: 'Password minimal 6 karakter'
+        })
+      }
     }
 
     // Check if user exists
@@ -41,35 +45,28 @@ router.post('/forgot-password', async (req, res) => {
       // Don't reveal if email exists or not
       return res.json({ 
         success: true,
-        message: 'Jika email terdaftar, tautan reset password akan dikirim ke email Anda' 
+        message: 'Jika email terdaftar, password baru akan ditampilkan' 
       })
     }
 
-    // Generate new random password
-    const newPassword = generateRandomPassword()
-    const hashedPassword = await bcrypt.hash(newPassword, 10)
+    // Generate atau gunakan password yang disediakan
+    const passwordToUse = newPassword || generateRandomPassword()
+    const hashedPassword = await bcrypt.hash(passwordToUse, 10)
 
     // Update password in database
     await db.query(
-      'UPDATE users SET password = $1, reset_token = NULL, reset_token_expiry = NULL WHERE id = $2',
+      'UPDATE users SET password = $1 WHERE id = $2',
       [hashedPassword, user.id]
     )
 
-    // Send new password via email
-    const emailResult = await sendNewPasswordEmail(user.email, newPassword)
-    
-    if (!emailResult.success) {
-      console.error('Gagal mengirim email reset:', emailResult.error)
-      return res.status(500).json({ 
-        success: false,
-        message: 'Gagal mengirim email reset password. Silakan coba lagi nanti.' 
-      })
-    }
-
+    // Return success dengan password
     res.json({ 
       success: true,
-      message: 'Password baru telah dikirim ke email Anda. Silakan periksa inbox email Anda.' 
+      message: 'Password berhasil direset',
+      newPassword: passwordToUse, // Password yang digunakan
+      email: user.email
     })
+    
   } catch (error) {
     console.error('Error forgot password:', error)
     res.status(500).json({ 
@@ -79,7 +76,7 @@ router.post('/forgot-password', async (req, res) => {
   }
 })
 
-// Reset password with token
+// Reset password dengan token (jika tetap ingin menggunakan token)
 router.post('/reset-password', async (req, res) => {
   try {
     const { token, newPassword, email } = req.body
@@ -91,7 +88,6 @@ router.post('/reset-password', async (req, res) => {
       })
     }
 
-    // Validate password strength
     if (newPassword.length < 8) {
       return res.status(400).json({ 
         success: false,
@@ -150,7 +146,6 @@ router.post('/change-password', async (req, res) => {
       })
     }
 
-    // Validate password strength
     if (newPassword.length < 8) {
       return res.status(400).json({ 
         success: false,
