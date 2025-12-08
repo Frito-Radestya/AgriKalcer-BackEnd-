@@ -48,7 +48,10 @@ export async function getEmailTransporter() {
         auth: { user, pass },
         tls: {
           rejectUnauthorized: false
-        }
+        },
+        connectionTimeout: 30000, // 30 seconds
+        greetingTimeout: 10000, // 10 seconds
+        socketTimeout: 10000 // 10 seconds
       })
     }
 
@@ -68,7 +71,10 @@ export async function getEmailTransporter() {
       },
       tls: {
         rejectUnauthorized: false
-      }
+      },
+      connectionTimeout: 30000, // 30 seconds
+      greetingTimeout: 10000, // 10 seconds
+      socketTimeout: 10000 // 10 seconds
     });
   } catch (error) {
     console.error('Error membuat email transporter:', error);
