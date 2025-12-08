@@ -87,7 +87,9 @@ router.post('/request-reset-otp', async (req, res) => {
 
       // Kirim OTP lewat email menggunakan konfigurasi SMTP aktif
       try {
-        const subject = 'Kode OTP Reset Password Lumbung Tani'
+        // Tambahkan timestamp di subject supaya setiap email tampil sebagai percakapan terpisah di Gmail
+        const timeLabel = new Date().toLocaleTimeString('id-ID', { hour12: false })
+        const subject = `Kode OTP Reset Password Lumbung Tani (${timeLabel})`
         const html = `
           <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #1a5276;">Kode OTP Reset Password</h2>
