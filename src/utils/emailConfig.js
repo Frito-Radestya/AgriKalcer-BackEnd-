@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import fetch from 'node-fetch';
 import db from '../db.js';
 import crypto from 'crypto';
 
@@ -83,56 +84,105 @@ export async function getEmailTransporter() {
 }
 
 export async function sendMail({ to, subject, html, text }) {
+  console.log('=== EMAIL SENDING DEBUG ===');
+  console.log('To:', to);
+  console.log('Subject:', subject);
+
   try {
-    console.log('=== EMAIL SENDING DEBUG ===');
-    console.log('To:', to);
-    console.log('Subject:', subject);
-    
-    const transporter = await getEmailTransporter();
-    console.log('Transporter created successfully');
-    
-    // Verify transporter connection
-    await transporter.verify();
-    console.log('Transporter verified successfully');
-    
+    // Ambil from_email dan from_name dari DB kalau ada, fallback ke ENV
     const { rows } = await db.query(
       'SELECT from_email, from_name FROM email_settings WHERE is_active = true ORDER BY created_at DESC LIMIT 1'
     );
 
-    let fromEmail
-    let fromName
+    let fromEmail;
+    let fromName;
 
     if (rows.length === 0) {
-      // Fallback ke environment SMTP_FROM atau SMTP_USER
-      const envFrom = process.env.SMTP_FROM || ''
+      const envFrom = process.env.SMTP_FROM || process.env.BREVO_SENDER || '';
       if (envFrom.includes('<') && envFrom.includes('>')) {
-        // format: Nama <email@domain>
-        fromEmail = envFrom.substring(envFrom.indexOf('<') + 1, envFrom.indexOf('>'))
-        fromName = envFrom.substring(0, envFrom.indexOf('<')).replace(/"/g, '').trim() || 'Lumbung Tani'
+        fromEmail = envFrom.substring(envFrom.indexOf('<') + 1, envFrom.indexOf('>'));
+        fromName = envFrom.substring(0, envFrom.indexOf('<')).replace(/"/g, '').trim() || 'Lumbung Tani';
       } else {
-        fromEmail = envFrom || process.env.SMTP_USER
-        fromName = 'Lumbung Tani'
+        fromEmail = envFrom || process.env.SMTP_USER || process.env.BREVO_SENDER;
+        fromName = process.env.BREVO_SENDER_NAME || 'Lumbung Tani';
       }
     } else {
-      fromEmail = rows[0].from_email
-      fromName = rows[0].from_name
+      fromEmail = rows[0].from_email;
+      fromName = rows[0].from_name;
     }
 
     console.log('From Email:', fromEmail);
     console.log('From Name:', fromName);
 
+    const plainText = text || html.replace(/<[^>]*>?/gm, '');
+    const recipients = Array.isArray(to) ? to : [to];
+
+    // 1) Jika BREVO_API_KEY tersedia, kirim via Brevo HTTP API
+    const brevoApiKey = process.env.BREVO_API_KEY;
+    if (brevoApiKey) {
+      console.log('Using Brevo HTTP API for email sending');
+
+      const payload = {
+        sender: {
+          email: fromEmail,
+          name: fromName
+        },
+        to: recipients.map((email) => ({ email })),
+        subject,
+        htmlContent: html,
+        textContent: plainText
+      };
+
+      console.log('Brevo payload:', JSON.stringify(payload, null, 2));
+
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          accept: 'application/json',
+          'content-type': 'application/json',
+          'api-key': brevoApiKey
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json().catch(() => ({}));
+      console.log('Brevo API status:', response.status);
+      console.log('Brevo API response:', data);
+
+      if (!response.ok) {
+        const message = data.message || data.error || `Brevo API error, status ${response.status}`;
+        console.error('❌ Gagal mengirim email via Brevo API:', message);
+        console.error('=== END EMAIL DEBUG ===');
+        return { success: false, error: message };
+      }
+
+      const messageId = data.messageId || data['message-id'] || data.message || 'brevo-message';
+      console.log('✅ Email terkirim via Brevo API:', messageId);
+      console.log('=== END EMAIL DEBUG ===');
+      return { success: true, messageId };
+    }
+
+    // 2) Fallback ke Nodemailer SMTP (untuk lokal / jika Brevo API tidak diset)
+    console.log('BREVO_API_KEY tidak ditemukan, fallback ke Nodemailer SMTP');
+
+    const transporter = await getEmailTransporter();
+    console.log('Transporter created successfully');
+
+    await transporter.verify();
+    console.log('Transporter verified successfully');
+
     const mailOptions = {
       from: `"${fromName}" <${fromEmail}>`,
-      to: Array.isArray(to) ? to.join(', ') : to,
+      to: recipients.join(', '),
       subject,
-      text: text || html.replace(/<[^>]*>?/gm, ''),
+      text: plainText,
       html
     };
 
-    console.log('Mail options:', JSON.stringify(mailOptions, null, 2));
+    console.log('Mail options (SMTP):', JSON.stringify(mailOptions, null, 2));
 
     const info = await transporter.sendMail(mailOptions);
-    console.log('✅ Email terkirim:', info.messageId);
+    console.log('✅ Email terkirim via SMTP:', info.messageId);
     console.log('Response:', info.response);
     console.log('=== END EMAIL DEBUG ===');
     return { success: true, messageId: info.messageId };
