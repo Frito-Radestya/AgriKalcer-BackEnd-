@@ -22,6 +22,7 @@ import messageTemplatesRouter from './routes/message_templates.js';
 import aiRouter from './routes/ai.js';
 import emailSettingsRouter from './routes/emailSettings.js';
 import otpRouter from './routes/otp.js';
+import debugRouter from './routes/debug.js';
 
 const app = express();
 
@@ -85,6 +86,7 @@ app.use('/api/message-templates', messageTemplatesRouter)
 app.use('/api/ai', aiRouter)
 app.use('/api/email-settings', emailSettingsRouter)
 app.use('/api/otp', otpRouter)
+app.use('/api/debug', debugRouter)
 
 const PORT = process.env.PORT || 4001
 app.listen(PORT, () => {

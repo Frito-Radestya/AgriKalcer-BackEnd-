@@ -46,6 +46,9 @@ export async function getEmailTransporter() {
         port,
         secure,
         auth: { user, pass },
+        tls: {
+          rejectUnauthorized: false
+        }
       })
     }
 
@@ -62,6 +65,9 @@ export async function getEmailTransporter() {
       auth: {
         user: config.smtp_user,
         pass: decryptedPassword
+      },
+      tls: {
+        rejectUnauthorized: false
       }
     });
   } catch (error) {
@@ -72,7 +78,17 @@ export async function getEmailTransporter() {
 
 export async function sendMail({ to, subject, html, text }) {
   try {
+    console.log('=== EMAIL SENDING DEBUG ===');
+    console.log('To:', to);
+    console.log('Subject:', subject);
+    
     const transporter = await getEmailTransporter();
+    console.log('Transporter created successfully');
+    
+    // Verify transporter connection
+    await transporter.verify();
+    console.log('Transporter verified successfully');
+    
     const { rows } = await db.query(
       'SELECT from_email, from_name FROM email_settings WHERE is_active = true ORDER BY created_at DESC LIMIT 1'
     );
@@ -96,6 +112,9 @@ export async function sendMail({ to, subject, html, text }) {
       fromName = rows[0].from_name
     }
 
+    console.log('From Email:', fromEmail);
+    console.log('From Name:', fromName);
+
     const mailOptions = {
       from: `"${fromName}" <${fromEmail}>`,
       to: Array.isArray(to) ? to.join(', ') : to,
@@ -104,11 +123,18 @@ export async function sendMail({ to, subject, html, text }) {
       html
     };
 
+    console.log('Mail options:', JSON.stringify(mailOptions, null, 2));
+
     const info = await transporter.sendMail(mailOptions);
-    console.log('Email terkirim:', info.messageId);
+    console.log('✅ Email terkirim:', info.messageId);
+    console.log('Response:', info.response);
+    console.log('=== END EMAIL DEBUG ===');
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error('Gagal mengirim email:', error);
+    console.error('❌ Gagal mengirim email:', error);
+    console.error('Error details:', error.message);
+    console.error('Error code:', error.code);
+    console.error('=== END EMAIL DEBUG ===');
     return { success: false, error: error.message };
   }
 }
