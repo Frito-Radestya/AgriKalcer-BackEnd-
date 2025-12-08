@@ -23,21 +23,37 @@ import aiRouter from './routes/ai.js';
 import emailSettingsRouter from './routes/emailSettings.js';
 import otpRouter from './routes/otp.js';
 import debugRouter from './routes/debug.js';
+import testEmailRouter from './routes/testEmail.js';
 
 const app = express();
 
 // Middleware
 app.use(helmet());
-app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    "http://localhost:5175",
-    "http://localhost:5176",
-    "https://agrikalcer-frontend.vercel.app"
-  ],
-  methods: "GET,POST,PUT,DELETE",
+
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:5175",
+  "http://localhost:5176",
+  "https://agrikalcer-frontend.vercel.app",
+  "https://lumbungtani-app.vercel.app"
+];
+
+const corsOptions = {
+  origin(origin, callback) {
+    // Allow non-browser tools (like curl / Postman) where origin bisa undefined
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('CORS not allowed'));
+  },
+  methods: "GET,POST,PUT,DELETE,OPTIONS",
+  allowedHeaders: "Content-Type, Authorization",
   credentials: true
-}));
+};
+
+app.use(cors(corsOptions));
+// Pastikan preflight OPTIONS di-handle dan mengembalikan header CORS yang benar
+app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use(morgan('dev'));
 
@@ -87,6 +103,7 @@ app.use('/api/ai', aiRouter)
 app.use('/api/email-settings', emailSettingsRouter)
 app.use('/api/otp', otpRouter)
 app.use('/api/debug', debugRouter)
+app.use('/api/test', testEmailRouter)
 
 const PORT = process.env.PORT || 4001
 app.listen(PORT, () => {
